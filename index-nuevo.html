@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Series - Sistema con Roles</title>
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+
+<!-- Pantalla de carga -->
+<div id="loadingScreen" class="wrap" style="text-align:center;padding:100px 20px">
+  <h1>Conectando con la base de datos...</h1>
+  <div class="muted">Espera un momento</div>
+</div>
+
+<!-- ========================================
+     PANTALLA DE LOGIN
+     ======================================== -->
+<div id="loginScreen" class="wrap grid hidden">
+  <div class="title-row">
+    <h1>Iniciar Sesión - Sistema de Series</h1>
+    <span class="pill">Local • sin servidor</span>
+  </div>
+  
+  <div class="card grid">
+    <div><strong>Ingresa tus credenciales</strong></div>
+    <div class="row">
+      <input type="text" id="loginUser" placeholder="Usuario" />
+      <input type="password" id="loginPass" placeholder="Contraseña" />
+    </div>
+    <button class="btn btn-success" id="btnLogin">Iniciar Sesión</button>
+    <div class="muted" id="loginInfo"></div>
+  </div>
+</div>
+
+<!-- ========================================
+     PANEL DE ADMINISTRADOR
+     ======================================== -->
+<div id="adminPanel" class="wrap grid hidden">
+  <div class="title-row">
+    <h1>Panel de Administración</h1>
+    <div style="display:flex;gap:10px;align-items:center">
+      <span class="pill pill-admin" id="adminUserPill"></span>
+      <button class="btn logout-btn" id="btnLogoutAdmin">Cerrar Sesión</button>
+    </div>
+  </div>
+
+  <!-- Gestión de Usuarios -->
+  <div class="card grid">
+    <div><strong>Gestión de Usuarios</strong></div>
+    
+    <div class="inline-form">
+      <input type="text" id="newUsername" placeholder="Nuevo usuario" />
+      <input type="password" id="newPassword" placeholder="Contraseña" />
+      <button class="btn btn-success" id="btnAddUser">Agregar Usuario</button>
+    </div>
+
+    <div id="usersList"></div>
+  </div>
+
+  <!-- Crear y Asignar Tareas -->
+  <div class="card grid">
+    <div><strong>Crear Nueva Tarea</strong></div>
+    
+    <input type="text" id="taskName" placeholder="Nombre de la tarea (ej: Pedido #123)" />
+    
+    <div>
+      <strong>Tabla de productos (Producto-Descripcion-Und)</strong>
+      <div class="muted">
+        Separada por <b>TAB</b>. Ej.: <span class="monospace">EA11SR[TAB]DESC[TAB]4</span>
+      </div>
+    </div>
+    <textarea id="taskTable" class="monospace" 
+              placeholder="EA11SR[TAB]DESC[TAB]4&#10;EA11SR[TAB]DESC[TAB]2&#10;ED30SR[TAB]DESC[TAB]3"></textarea>
+    
+    <div class="inline-form">
+      <select id="taskAssignUser">
+        <option value="">Asignar a usuario...</option>
+      </select>
+      <button class="btn btn-success" id="btnCreateTask">Crear y Asignar Tarea</button>
+    </div>
+  </div>
+
+  <!-- Lista de Tareas -->
+  <div class="card grid">
+    <div><strong>Tareas Creadas</strong></div>
+    <div id="tasksList"></div>
+  </div>
+</div>
+
+<!-- Modal para Ver Resultado de Tarea -->
+<div id="taskResultModal" class="modal hidden">
+  <div class="modal-content">
+    <div class="title-row">
+      <h2 id="modalTaskTitle">Resultado de Tarea</h2>
+      <button class="btn btn-warn" id="btnCloseModal">✕ Cerrar</button>
+    </div>
+    <div class="card">
+      <div id="modalTaskInfo" class="muted"></div>
+    </div>
+    <div class="card grid">
+      <div class="title-row">
+        <strong>Resultado Escaneado</strong>
+        <div class="actions-right">
+          <button class="btn" id="btnModalDescargar">Descargar</button>
+          <button class="btn" id="btnModalCopiar">Copiar</button>
+        </div>
+      </div>
+      <textarea id="modalResultado" class="monospace out" readonly></textarea>
+    </div>
+  </div>
+</div>
+
+<!-- ========================================
+     PANTALLA PRINCIPAL (USUARIO)
+     ======================================== -->
+<div id="mainScreen" class="wrap grid hidden">
+  <div class="title-row">
+    <h1>Mis Tareas de Escaneo</h1>
+    <div style="display:flex;gap:10px;align-items:center">
+      <span class="pill pill-user" id="userPill"></span>
+      <button class="btn logout-btn" id="btnLogout">Cerrar Sesión</button>
+    </div>
+  </div>
+
+  <!-- Lista de Tareas del Usuario -->
+  <div class="card grid">
+    <div><strong>Tareas Asignadas</strong></div>
+    <div id="userTasksList"></div>
+  </div>
+</div>
+
+<!-- ========================================
+     PANTALLA DE ESCANEO DE TAREA
+     ======================================== -->
+<div id="scanScreen" class="wrap grid hidden">
+  <div class="title-row">
+    <h1 id="scanTitle">Escaneando Tarea</h1>
+    <div style="display:flex;gap:10px;align-items:center">
+      <button class="btn" id="btnBackToTasks">← Volver a Mis Tareas</button>
+      <button class="btn logout-btn" id="btnLogoutScan">Cerrar Sesión</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div><strong>Información de la Tarea</strong></div>
+    <div id="taskInfo" class="muted"></div>
+  </div>
+
+  <!-- Elección de modo -->
+  <div class="card grid" id="modoCard" style="display:none">
+    <div><strong>¿Cómo ingresarás las series?</strong></div>
+    <div class="row">
+      <button class="btn" id="modoS">Colocar al orden al picking</button>
+      <button class="btn" id="modoLibre">Escoger orden de modelos</button>
+      <button class="btn" id="modoN">Sin series (solo modelos)</button>
+    </div>
+    <div class="muted">
+      Nota: si la serie tiene <b>letras</b> → 8 dígitos después del <b>2.º</b>; 
+      si no tiene letras → últimos 8 dígitos.
+    </div>
+  </div>
+
+  <!-- Modo Libre: Seleccionar orden de modelos -->
+  <div class="card grid hidden" id="libreCard">
+    <div><strong>Selecciona un modelo para escanear</strong></div>
+    <div class="muted">Puedes escanear de a uno y cambiar entre tareas. El progreso se guarda automáticamente.</div>
+    <div id="modelosDisponibles" class="grid" style="gap:10px"></div>
+    <div id="progresoModelos" class="muted" style="margin-top:10px"></div>
+    <div class="row">
+      <button class="btn btn-success" id="btnFinalizarTarea" style="display:none">Finalizar Tarea</button>
+      <button class="btn" id="btnVolverModoLibre">Volver a Tareas</button>
+    </div>
+  </div>
+
+  <!-- Modo S: guiado -->
+  <div class="card grid hidden" id="guiadoCard">
+    <div class="title-row">
+      <strong id="currentModeLabel">Series Al orden del picking</strong>
+      <span class="progress" id="progTop"></span>
+    </div>
+    <div id="guiadoInfo" class="muted"></div>
+    <div class="row">
+      <input id="serieInput" class="monospace" 
+             placeholder="Escribe la serie y presiona Enter (o 'b' para deshacer)" />
+      <button class="btn-warn" id="btnBack">Deshacer</button>
+    </div>
+    <div id="previewS" class="monospace out" style="min-height:200px;max-height:400px;overflow-y:auto;white-space:pre-wrap"></div>
+    <button class="btn" id="btnVolverModelosLibre" style="margin-top:10px">← Volver a Lista de Modelos</button>
+  </div>
+
+  <!-- Modo M: por bloques -->
+  <div class="card grid hidden" id="porModeloCard">
+    <div>
+      <strong>Pega series por cada bloque</strong> 
+      <span class="badge" id="totBloques"></span>
+    </div>
+    <div id="modelBlocks" class="grid"></div>
+    <div class="row">
+      <button class="btn" id="btnProcesarM">Procesar</button>
+      <button class="btn" id="btnVolverModo">Volver</button>
+    </div>
+    <div class="muted">Se verá el progreso por bloque (ej: 2/5).</div>
+  </div>
+
+  <!-- Resultado -->
+  <div class="card grid hidden" id="resultadoCard">
+    <div class="title-row">
+      <strong>Resultado</strong>
+      <div class="actions-right">
+        <button class="btn" id="btnDescargar">Descargar resultado.txt</button>
+        <button class="btn" id="btnCopiar">Copiar</button>
+      </div>
+    </div>
+    <textarea id="salida" class="monospace out" readonly></textarea>
+  </div>
+</div>
+
+<!-- ========================================
+     SCRIPTS
+     ======================================== -->
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+
+<!-- Configuración de Firebase -->
+<script>
+  // IMPORTANTE: Reemplaza esta configuración con la tuya
+  const firebaseConfig = {
+    apiKey: "TAIzaSyC50UY1LT6iiOIMDQoRXEsRGqmQDprKxwc",
+    authDomain: "series-sistema.firebaseapp.com",
+    databaseURL: "https://series-sistema-default-rtdb.firebaseio.com",
+    projectId: "series-sistema",
+    storageBucket: "series-sistema.firebasestorage.app",
+    messagingSenderId: "131109892137",
+    appId: "1:131109892137:web:9602a7716668808ec52c38"
+  };
+  
+  // Inicializar Firebase
+  firebase.initializeApp(firebaseConfig);
+  
+  // Ocultar pantalla de carga cuando Firebase esté listo
+  firebase.database().ref('.info/connected').on('value', (snapshot) => {
+    if (snapshot.val() === true) {
+      document.getElementById('loadingScreen').style.display = 'none';
+    }
+  });
+</script>
+
+<!-- Scripts de la aplicación -->
+<script src="js/auth.js"></script>
+<script src="js/core.js"></script>
+<script src="js/ui-admin.js"></script>
+<script src="js/ui-user.js"></script>
+<script src="js/scanner.js"></script>
+<script src="js/init.js"></script>
+
+</body>
+</html>
