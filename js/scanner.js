@@ -190,13 +190,35 @@ function agregarSerieGuiada(v) {
     return;
   }
   
+  // Verificar duplicados en el bloque actual
+  const bloque = state.bloques[state.idxB];
+  const serieNormalizada = normalizarAuto(v);
+  
+  // Calcular el inicio y fin del bloque actual en seriesRaw
+  let inicioBloque = 0;
+  for (let i = 0; i < state.idxB; i++) {
+    inicioBloque += state.bloques[i].cantidad;
+  }
+  const finBloque = inicioBloque + bloque.cantidad;
+  const seriesDelBloque = state.seriesRaw.slice(inicioBloque, Math.min(state.seriesRaw.length, finBloque));
+  
+  // Normalizar y verificar duplicados
+  const seriesNormalizadas = seriesDelBloque.map(s => normalizarAuto(s));
+  if (seriesNormalizadas.includes(serieNormalizada)) {
+    beep();
+    beep();
+    vibrar();
+    alert(`⚠️ DUPLICADO DETECTADO\n\nLa serie "${serieNormalizada}" ya fue escaneada en este modelo (${bloque.modelo}).\n\nNo se agregará nuevamente.`);
+    serieInput.value = '';
+    serieInput.focus();
+    return;
+  }
+  
   state.seriesRaw.push(v);
   state.serieSeleccionada = null; // Limpiar selección al agregar nueva serie
   
   // Guardar progreso en Modo S
   guardarProgresoTarea();
-  
-  const bloque = state.bloques[state.idxB];
   
   if (state.iEnBloque < bloque.cantidad) {
     state.iEnBloque++;
@@ -559,6 +581,20 @@ function agregarSerieGuiadaLibre(serie) {
   if (escaneadas >= bloqueActual.cantidad) {
     alert(`No puedes agregar más series. Este modelo ya tiene ${escaneadas}/${bloqueActual.cantidad} escaneadas.`);
     serieInput.value = '';
+    return;
+  }
+  
+  // Verificar duplicados en este modelo
+  const serieNormalizada = normalizarAuto(serie);
+  const seriesNormalizadas = state.seriesPorModelo[idx].map(s => normalizarAuto(s));
+  
+  if (seriesNormalizadas.includes(serieNormalizada)) {
+    beep();
+    beep();
+    vibrar();
+    alert(`⚠️ DUPLICADO DETECTADO\n\nLa serie "${serieNormalizada}" ya fue escaneada en este modelo (${bloqueActual.modelo}).\n\nNo se agregará nuevamente.`);
+    serieInput.value = '';
+    serieInput.focus();
     return;
   }
   
