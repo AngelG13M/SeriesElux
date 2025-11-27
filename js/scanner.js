@@ -53,7 +53,7 @@ const btnCopiar = document.getElementById('btnCopiar');
    EVENTOS - SELECCIÓN DE MODO
    ======================================== */
 
-modoS.onclick = () => {
+modoS.onclick = async () => {
   state.modoLibreActivo = false;
   modoCard.style.display = 'none';
   guiadoCard.classList.remove('hidden');
@@ -62,7 +62,7 @@ modoS.onclick = () => {
   libreCard.classList.add('hidden');
   
   // Cargar progreso guardado si existe
-  cargarProgresoTarea();
+  await cargarProgresoTarea();
   
   // Si no hay progreso guardado, inicializar
   if (state.seriesRaw.length === 0) {
@@ -390,7 +390,8 @@ function mostrarResultado() {
   
   // Guardar resultado en la tarea si estamos en modo tarea
   if (currentTaskId) {
-    AUTH.updateTaskStatus(currentTaskId, 'completed', state.salidaLineas.join("\n"));
+    const completedBy = (typeof AUTH !== 'undefined' && AUTH.currentUser) ? AUTH.currentUser.username : null;
+    AUTH.updateTaskStatus(currentTaskId, 'completed', state.salidaLineas.join("\n"), completedBy);
     alert('Tarea completada y guardada correctamente');
   }
 }
@@ -402,7 +403,7 @@ btnCopiar.onclick = () => copiarTexto(state.salidaLineas.join("\n"));
    MODO LIBRE - ESCOGER ORDEN DE MODELOS
    ======================================== */
 
-function mostrarSeleccionOrden() {
+async function mostrarSeleccionOrden() {
   modoCard.style.display = 'none';
   libreCard.classList.remove('hidden');
   guiadoCard.classList.add('hidden');
@@ -414,7 +415,7 @@ function mostrarSeleccionOrden() {
   state.seriesRaw = [];
   
   // Cargar progreso guardado si existe
-  cargarProgresoTarea();
+  await cargarProgresoTarea();
   
   modelosDisponibles.innerHTML = '';
   
@@ -784,10 +785,16 @@ function guardarProgresoTarea() {
     timestamp: Date.now()
   };
   
+  // Guardar en localStorage (respaldo local)
   localStorage.setItem(`taskProgress_${currentTaskId}`, JSON.stringify(progreso));
+  
+  // Guardar en Firebase (sincronización entre dispositivos)
+  if (typeof AUTH !== 'undefined' && AUTH.saveTaskProgress) {
+    AUTH.saveTaskProgress(currentTaskId, progreso);
+  }
 }
 
-function cargarProgresoTarea() {
+async function cargarProgresoTarea() {
   if (!currentTaskId) {
     state.seriesPorModelo = {};
     state.seriesRaw = [];
@@ -796,9 +803,26 @@ function cargarProgresoTarea() {
     return;
   }
   
-  const saved = localStorage.getItem(`taskProgress_${currentTaskId}`);
-  if (saved) {
-    const progreso = JSON.parse(saved);
+  let progreso = null;
+  
+  // Primero intentar cargar desde Firebase (más actualizado)
+  if (typeof AUTH !== 'undefined' && AUTH.loadTaskProgress) {
+    progreso = await AUTH.loadTaskProgress(currentTaskId);
+  }
+  
+  // Si no hay en Firebase, cargar desde localStorage
+  if (!progreso) {
+    const saved = localStorage.getItem(`taskProgress_${currentTaskId}`);
+    if (saved) {
+      try {
+        progreso = JSON.parse(saved);
+      } catch (e) {
+        console.error('Error al parsear progreso local:', e);
+      }
+    }
+  }
+  
+  if (progreso) {
     state.seriesPorModelo = progreso.seriesPorModelo || {};
     state.modoLibreActivo = progreso.modoLibreActivo || false;
     // Restaurar progreso del Modo S

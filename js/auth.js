@@ -96,14 +96,16 @@ const AUTH = {
     }
   },
   
-  async createTask(taskName, tableData, assignedTo) {
+  async createTask(taskName, tableData) {
     try {
       const taskId = Date.now().toString();
       const task = {
         id: taskId,
         name: taskName,
         tableData: tableData,
-        assignedTo: assignedTo,
+        assignedTo: null, // Nadie asignado inicialmente
+        takenBy: null, // Quién tomó/está haciendo la tarea
+        completedBy: null, // Quién completó la tarea
         status: 'pending',
         createdAt: new Date().toISOString(),
         result: null
@@ -117,6 +119,19 @@ const AUTH = {
       return null;
     }
   },
+
+  async takeTask(taskId, username) {
+    try {
+      await this.db.ref(`tasks/${taskId}`).update({
+        takenBy: username,
+        assignedTo: username // Para compatibilidad con código existente
+      });
+      return true;
+    } catch (error) {
+      console.error('Error al tomar tarea:', error);
+      return false;
+    }
+  },
   
   async getTasksByUser(username) {
     try {
@@ -124,7 +139,12 @@ const AUTH = {
       const snapshot = await tasksRef.once('value');
       const tasks = snapshot.val() || {};
       
-      return Object.values(tasks).filter(t => t.assignedTo === username);
+      // Mostrar: tareas sin asignar (disponibles) + tareas que este usuario está haciendo
+      return Object.values(tasks).filter(t => 
+        t.assignedTo === null || // Tareas disponibles para todos
+        t.assignedTo === username || // Tareas que este usuario tomó
+        t.takenBy === username // Tareas que este usuario está haciendo
+      );
     } catch (error) {
       console.error('Error al obtener tareas:', error);
       return [];
@@ -155,16 +175,45 @@ const AUTH = {
     }
   },
   
-  async updateTaskStatus(id, status, result = null) {
+  async updateTaskStatus(id, status, result = null, completedBy = null) {
     try {
       const updates = { status };
       if (result) updates.result = result;
-      if (status === 'completed') updates.completedAt = new Date().toISOString();
+      if (status === 'completed') {
+        updates.completedAt = new Date().toISOString();
+        if (completedBy) updates.completedBy = completedBy;
+      }
       
       await this.db.ref(`tasks/${id}`).update(updates);
     } catch (error) {
       console.error('Error al actualizar tarea:', error);
       alert('Error al actualizar tarea. Verifica tu conexión.');
+    }
+  },
+
+  async saveTaskProgress(id, progress) {
+    try {
+      await this.db.ref(`tasks/${id}/progress`).set(progress);
+      // También actualizar estado a 'in-progress' si no está completada
+      const taskRef = this.db.ref(`tasks/${id}/status`);
+      const statusSnapshot = await taskRef.once('value');
+      if (statusSnapshot.val() === 'pending') {
+        await taskRef.set('in-progress');
+      }
+    } catch (error) {
+      console.error('Error al guardar progreso:', error);
+      // No mostrar alerta para no interrumpir el escaneo
+    }
+  },
+
+  async loadTaskProgress(id) {
+    try {
+      const progressRef = this.db.ref(`tasks/${id}/progress`);
+      const snapshot = await progressRef.once('value');
+      return snapshot.val();
+    } catch (error) {
+      console.error('Error al cargar progreso:', error);
+      return null;
     }
   },
   

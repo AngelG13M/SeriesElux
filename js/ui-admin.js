@@ -142,27 +142,16 @@ async function updateTaskAssignSelect() {
   const select = document.getElementById('taskAssignUser');
   select.innerHTML = '<option value="">Cargando usuarios...</option>';
   
-  const users = await AUTH.getAllUsers();
-  select.innerHTML = '<option value="">Asignar a usuario...</option>';
-  
-  Object.keys(users).forEach(username => {
-    if (users[username].role !== 'admin') {
-      const option = document.createElement('option');
-      option.value = username;
-      option.textContent = username;
-      select.appendChild(option);
-    }
-  });
+  // Ya no se necesita cargar usuarios
 }
 
 // Crear tarea
 document.getElementById('btnCreateTask').onclick = async () => {
   const taskName = document.getElementById('taskName').value.trim();
   const tableData = document.getElementById('taskTable').value.trim();
-  const assignedTo = document.getElementById('taskAssignUser').value;
   
-  if (!taskName || !tableData || !assignedTo) {
-    alert('Completa todos los campos');
+  if (!taskName || !tableData) {
+    alert('Completa el nombre y la tabla de la tarea');
     return;
   }
   
@@ -170,13 +159,12 @@ document.getElementById('btnCreateTask').onclick = async () => {
   btn.disabled = true;
   btn.textContent = 'Creando tarea...';
   
-  const task = await AUTH.createTask(taskName, tableData, assignedTo);
+  const task = await AUTH.createTask(taskName, tableData);
   
   if (task) {
-    alert('Tarea creada y asignada correctamente');
+    alert('Tarea creada correctamente. Disponible para todos los usuarios.');
     document.getElementById('taskName').value = '';
     document.getElementById('taskTable').value = '';
-    document.getElementById('taskAssignUser').value = '';
     await updateAdminTasksList();
   }
   
@@ -214,21 +202,31 @@ async function updateAdminTasksList() {
       statusClass = 'status-completed';
     }
     
+    let userInfo = 'Disponible para todos';
+    if (task.status === 'completed' && task.completedBy) {
+      userInfo = `Completada por: ${task.completedBy}`;
+    } else if (task.status === 'in-progress' && task.takenBy) {
+      userInfo = `En progreso por: ${task.takenBy}`;
+    } else if (task.takenBy) {
+      userInfo = `Tomada por: ${task.takenBy}`;
+    }
+    
     div.innerHTML = `
       <div style="display:flex;justify-content:space-between;align-items:center">
         <div style="flex:1">
           <strong>${task.name}</strong>
           <span class="task-status ${statusClass}">${statusText}</span>
-          <div class="muted">Asignado a: ${task.assignedTo} · Creado: ${new Date(task.createdAt).toLocaleString()}</div>
+          <div class="muted">${userInfo} · Creado: ${new Date(task.createdAt).toLocaleString()}</div>
           ${task.status === 'completed' ? '<div class="muted" style="color:#51cf66">Haz clic para ver el resultado</div>' : ''}
+          ${task.status === 'in-progress' ? '<div class="muted" style="color:#4da3ff">Haz clic para ver el progreso actual</div>' : ''}
         </div>
         <button class="btn btn-warn" onclick="deleteTask('${task.id}')" 
                 style="width:auto;padding:6px 12px">Eliminar</button>
       </div>
     `;
     
-    // Hacer que la tarea sea clickeable si está completada
-    if (task.status === 'completed') {
+    // Hacer que la tarea sea clickeable si está completada o en progreso
+    if (task.status === 'completed' || task.status === 'in-progress') {
       div.style.cursor = 'pointer';
       div.onclick = (e) => {
         // No mostrar modal si se hace clic en el botón eliminar
@@ -255,29 +253,126 @@ async function deleteTask(id) {
    MODAL PARA VER RESULTADO
    ======================================== */
 
-function showTaskResultModal(task) {
+async function showTaskResultModal(task) {
   const modal = document.getElementById('taskResultModal');
   
   document.getElementById('modalTaskTitle').textContent = task.name;
-  document.getElementById('modalTaskInfo').innerHTML = `
-    <strong>Tarea:</strong> ${task.name}<br>
-    <strong>Asignado a:</strong> ${task.assignedTo}<br>
-    <strong>Creado:</strong> ${new Date(task.createdAt).toLocaleString()}<br>
-    <strong>Completado:</strong> ${new Date(task.completedAt).toLocaleString()}<br>
-    <strong>Estado:</strong> <span style="color:#51cf66">Completada</span>
-  `;
-  document.getElementById('modalResultado').value = task.result || 'Sin resultado';
+  
+  let resultadoTexto = '';
+  
+  if (task.status === 'completed') {
+    // Tarea completada - mostrar resultado final
+    document.getElementById('modalTaskInfo').innerHTML = `
+      <strong>Tarea:</strong> ${task.name}<br>
+      <strong>Completada por:</strong> ${task.completedBy || task.takenBy || task.assignedTo || 'Desconocido'}<br>
+      <strong>Creado:</strong> ${new Date(task.createdAt).toLocaleString()}<br>
+      <strong>Completado:</strong> ${new Date(task.completedAt).toLocaleString()}<br>
+      <strong>Estado:</strong> <span style="color:#51cf66">Completada</span>
+    `;
+    resultadoTexto = task.result || 'Sin resultado';
+  } else if (task.status === 'in-progress') {
+    // Tarea en progreso - mostrar progreso actual
+    const progreso = await obtenerProgresoTarea(task.id);
+    
+    document.getElementById('modalTaskInfo').innerHTML = `
+      <strong>Tarea:</strong> ${task.name}<br>
+      <strong>En progreso por:</strong> ${task.takenBy || task.assignedTo || 'Desconocido'}<br>
+      <strong>Creado:</strong> ${new Date(task.createdAt).toLocaleString()}<br>
+      <strong>Estado:</strong> <span style="color:#4da3ff">En Progreso</span><br>
+      <strong>Última actualización:</strong> ${progreso.timestamp ? new Date(progreso.timestamp).toLocaleString() : 'No disponible'}
+    `;
+    
+    if (progreso.seriesPorModelo) {
+      // Modo Libre - mostrar series por modelo
+      resultadoTexto = generarResultadoProgreso(task.tableData, progreso.seriesPorModelo, progreso.modoLibreActivo);
+    } else if (progreso.seriesRaw && progreso.seriesRaw.length > 0) {
+      // Modo S - mostrar series escaneadas
+      const bloques = parseTabla(task.tableData);
+      resultadoTexto = generarResultadoModoS(bloques, progreso.seriesRaw);
+    } else {
+      resultadoTexto = 'El usuario aún no ha escaneado ninguna serie.';
+    }
+  }
+  
+  document.getElementById('modalResultado').value = resultadoTexto;
   
   modal.classList.remove('hidden');
   
   // Configurar botones del modal
   document.getElementById('btnModalDescargar').onclick = () => {
-    descargarTexto(`${task.name}_resultado.txt`, task.result || '');
+    const filename = task.status === 'completed' ? `${task.name}_resultado.txt` : `${task.name}_progreso.txt`;
+    descargarTexto(filename, resultadoTexto || '');
   };
   
   document.getElementById('btnModalCopiar').onclick = () => {
-    copiarTexto(task.result || '');
+    copiarTexto(resultadoTexto || '');
   };
+}
+
+// Obtener progreso guardado desde Firebase
+async function obtenerProgresoTarea(taskId) {
+  // Primero intentar desde Firebase (sincronizado entre dispositivos)
+  if (typeof AUTH !== 'undefined' && AUTH.loadTaskProgress) {
+    const progreso = await AUTH.loadTaskProgress(taskId);
+    if (progreso) {
+      return progreso;
+    }
+  }
+  
+  // Fallback a localStorage (respaldo local)
+  const saved = localStorage.getItem(`taskProgress_${taskId}`);
+  if (saved) {
+    try {
+      return JSON.parse(saved);
+    } catch (e) {
+      return {};
+    }
+  }
+  return {};
+}
+
+// Generar resultado del progreso para Modo Libre
+function generarResultadoProgreso(tableData, seriesPorModelo, modoLibreActivo) {
+  const bloques = parseTabla(tableData);
+  const lineas = [];
+  
+  bloques.forEach((bloque, idx) => {
+    const series = seriesPorModelo[idx] || [];
+    if (series.length > 0) {
+      const seriesNorm = series.map(s => normalizarAuto(s));
+      seriesNorm.forEach(serie => {
+        lineas.push(`${bloque.modelo}\t${serie}`);
+      });
+    }
+  });
+  
+  if (lineas.length === 0) {
+    return 'El usuario aún no ha escaneado ninguna serie.';
+  }
+  
+  return lineas.join('\n');
+}
+
+// Generar resultado del progreso para Modo S
+function generarResultadoModoS(bloques, seriesRaw) {
+  const lineas = [];
+  const itemsExpandidos = [];
+  
+  bloques.forEach(b => {
+    for (let i = 0; i < b.cantidad; i++) {
+      itemsExpandidos.push(b.modelo);
+    }
+  });
+  
+  const seriesNorm = seriesRaw.map(s => normalizarAuto(s));
+  
+  itemsExpandidos.forEach((modelo, idx) => {
+    if (idx < seriesNorm.length) {
+      lineas.push(`${modelo}\t${seriesNorm[idx]}`);
+    }
+  });
+  
+  return lineas.join('\n');
 }
 
 document.getElementById('btnCloseModal').onclick = () => {

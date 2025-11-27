@@ -67,9 +67,13 @@ async function startTask(taskId) {
     return;
   }
   
-  // Marcar como en progreso
+  // Marcar como en progreso y registrar quién la toma
   if (task.status === 'pending') {
+    await AUTH.takeTask(taskId, AUTH.currentUser.username);
     await AUTH.updateTaskStatus(taskId, 'in-progress');
+  } else if (task.status === 'in-progress' && !task.takenBy) {
+    // Si ya está en progreso pero no tiene takenBy, registrar este usuario
+    await AUTH.takeTask(taskId, AUTH.currentUser.username);
   }
   
   // Cargar datos de la tarea
