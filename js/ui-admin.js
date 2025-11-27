@@ -65,7 +65,6 @@ async function showMainInterface() {
 
 async function loadAdminPanel() {
   await updateUsersList();
-  await updateTaskAssignSelect();
   await updateAdminTasksList();
 }
 
@@ -131,18 +130,9 @@ async function deleteUser(username) {
     const success = await AUTH.deleteUser(username);
     if (success) {
       await updateUsersList();
-      await updateTaskAssignSelect();
       await updateAdminTasksList();
     }
   }
-}
-
-// Actualizar selector de usuarios para asignar tareas
-async function updateTaskAssignSelect() {
-  const select = document.getElementById('taskAssignUser');
-  select.innerHTML = '<option value="">Cargando usuarios...</option>';
-  
-  // Ya no se necesita cargar usuarios
 }
 
 // Crear tarea
