@@ -210,10 +210,11 @@ const AUTH = {
     try {
       const progressRef = this.db.ref(`tasks/${id}/progress`);
       const snapshot = await progressRef.once('value');
-      return snapshot.val();
+      const data = snapshot.val();
+      return data || {}; // Devolver objeto vacío si no hay progreso
     } catch (error) {
       console.error('Error al cargar progreso:', error);
-      return null;
+      return {}; // Devolver objeto vacío en caso de error
     }
   },
   

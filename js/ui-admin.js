@@ -89,7 +89,6 @@ document.getElementById('btnAddUser').onclick = async () => {
     document.getElementById('newUsername').value = '';
     document.getElementById('newPassword').value = '';
     await updateUsersList();
-    await updateTaskAssignSelect();
   } else {
     alert('El usuario ya existe');
   }
@@ -303,9 +302,14 @@ async function showTaskResultModal(task) {
 async function obtenerProgresoTarea(taskId) {
   // Primero intentar desde Firebase (sincronizado entre dispositivos)
   if (typeof AUTH !== 'undefined' && AUTH.loadTaskProgress) {
-    const progreso = await AUTH.loadTaskProgress(taskId);
-    if (progreso) {
-      return progreso;
+    try {
+      const progreso = await AUTH.loadTaskProgress(taskId);
+      // Si Firebase tiene datos, usarlos
+      if (progreso && Object.keys(progreso).length > 0) {
+        return progreso;
+      }
+    } catch (error) {
+      console.error('Error al cargar progreso desde Firebase:', error);
     }
   }
   
@@ -315,6 +319,7 @@ async function obtenerProgresoTarea(taskId) {
     try {
       return JSON.parse(saved);
     } catch (e) {
+      console.error('Error al parsear progreso de localStorage:', e);
       return {};
     }
   }
