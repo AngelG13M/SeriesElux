@@ -271,12 +271,12 @@ async function showTaskResultModal(task) {
       <strong>Última actualización:</strong> ${progreso.timestamp ? new Date(progreso.timestamp).toLocaleString() : 'No disponible'}
     `;
     
-    if (progreso.seriesPorModelo) {
+    if (progreso.seriesPorModelo && Object.keys(progreso.seriesPorModelo).length > 0) {
       // Modo Libre - mostrar series por modelo
       resultadoTexto = generarResultadoProgreso(task.tableData, progreso.seriesPorModelo, progreso.modoLibreActivo);
     } else if (progreso.seriesRaw && progreso.seriesRaw.length > 0) {
       // Modo S - mostrar series escaneadas
-      const bloques = parseTabla(task.tableData);
+      const {bloques} = parseTabla(task.tableData);
       resultadoTexto = generarResultadoModoS(bloques, progreso.seriesRaw);
     } else {
       resultadoTexto = 'El usuario aún no ha escaneado ninguna serie.';
@@ -328,7 +328,7 @@ async function obtenerProgresoTarea(taskId) {
 
 // Generar resultado del progreso para Modo Libre
 function generarResultadoProgreso(tableData, seriesPorModelo, modoLibreActivo) {
-  const bloques = parseTabla(tableData);
+  const {bloques} = parseTabla(tableData);
   const lineas = [];
   
   bloques.forEach((bloque, idx) => {
