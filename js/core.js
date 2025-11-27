@@ -49,10 +49,19 @@ function brasil8Despues2do(s) {
 
 function normalizarAuto(s) {
   if (!s || !s.trim()) return "";
+  
+  // Si comienza con "EJWL" (al principio), usar últimos 8 dígitos
+  if (s.toUpperCase().startsWith("EJWL")) {
+    return ultimos8(s);
+  }
+  
+  // Si tiene letras, intentar brasil (8 después del 2do), si no, últimos 8
   const tieneLetra = /[A-Za-z]/.test(s);
   if (tieneLetra) {
     return brasil8Despues2do(s) || ultimos8(s);
   }
+  
+  // Si no tiene letras, últimos 8
   return ultimos8(s);
 }
 
