@@ -141,7 +141,7 @@ const AUTH = {
       
       // Mostrar: tareas sin asignar (disponibles) + tareas que este usuario está haciendo
       return Object.values(tasks).filter(t => 
-        t.assignedTo === null || // Tareas disponibles para todos
+        !t.assignedTo || // Tareas disponibles para todos (null, undefined, o vacío)
         t.assignedTo === username || // Tareas que este usuario tomó
         t.takenBy === username // Tareas que este usuario está haciendo
       );
