@@ -8,7 +8,6 @@ const state = {
   seriesRaw: [],
   salidaLineas: [],
   idxB: 0,
-  iEnBloque: 1,
   ordenLibre: [],
   bloquesReordenados: [],
   modelosCompletados: [],
@@ -67,7 +66,6 @@ modoS.onclick = async () => {
   // Si no hay progreso guardado, inicializar
   if (state.seriesRaw.length === 0) {
     state.idxB = 0;
-    state.iEnBloque = 1;
   }
   
   document.getElementById('currentModeLabel').textContent = 'Series Al orden del picking';
@@ -126,7 +124,15 @@ function actualizarGuiadoUI() {
   const bloque = state.bloques[state.idxB];
   const cant = bloque.cantidad;
   progTop.textContent = `Bloque ${state.idxB + 1}/${totalBloques}`;
-  guiadoInfo.textContent = `${bloque.modelo} ${state.iEnBloque}/${cant}`;
+  
+  // Calcular cuántas series se han escaneado en este bloque
+  let seriesEscaneadasAntes = 0;
+  for (let i = 0; i < state.idxB; i++) {
+    seriesEscaneadasAntes += state.bloques[i].cantidad;
+  }
+  const seriesEnEsteBloque = Math.max(0, state.seriesRaw.length - seriesEscaneadasAntes);
+  
+  guiadoInfo.textContent = `${bloque.modelo} ${seriesEnEsteBloque}/${cant}`;
   
   // Mostrar últimas 20 series como elementos clicables
   const ultimasSeries = state.seriesRaw.slice(-20);
@@ -220,15 +226,21 @@ function agregarSerieGuiada(v) {
   // Guardar progreso en Modo S
   guardarProgresoTarea();
   
-  if (state.iEnBloque < bloque.cantidad) {
-    state.iEnBloque++;
+  // Calcular cuántas series hay en el bloque actual
+  let seriesEscaneadasAntes = 0;
+  for (let i = 0; i < state.idxB; i++) {
+    seriesEscaneadasAntes += state.bloques[i].cantidad;
+  }
+  const seriesEnEsteBloque = state.seriesRaw.length - seriesEscaneadasAntes;
+  
+  if (seriesEnEsteBloque < bloque.cantidad) {
     actualizarGuiadoUI();
     return;
   }
   
+  // Bloque completado
   state.idxB++;
   if (state.idxB < state.bloques.length) {
-    state.iEnBloque = 1;
     beep();
     vibrar();
     actualizarGuiadoUI();
@@ -254,16 +266,25 @@ function deshacerUna() {
       state.seriesRaw.splice(indexToRemove, 1);
       state.serieSeleccionada = null; // Limpiar selección
       
-      // Recalcular posición en el bloque
-      let totalAntes = 0;
-      for (let i = 0; i < state.bloques.length; i++) {
-        const cantBloque = state.bloques[i].cantidad;
-        if (totalAntes + cantBloque > state.seriesRaw.length) {
-          state.idxB = i;
-          state.iEnBloque = state.seriesRaw.length - totalAntes + 1;
-          break;
+      // Recalcular posición en el bloque con la misma lógica que cargarProgresoTarea
+      if (state.seriesRaw.length > 0 && state.bloques.length > 0) {
+        let acumulado = 0;
+        state.idxB = state.bloques.length - 1;
+        
+        for (let i = 0; i < state.bloques.length; i++) {
+          const siguienteAcumulado = acumulado + state.bloques[i].cantidad;
+          if (state.seriesRaw.length >= acumulado && state.seriesRaw.length < siguienteAcumulado) {
+            state.idxB = i;
+            break;
+          }
+          if (state.seriesRaw.length === siguienteAcumulado && i < state.bloques.length - 1) {
+            state.idxB = i + 1;
+            break;
+          }
+          acumulado = siguienteAcumulado;
         }
-        totalAntes += cantBloque;
+      } else {
+        state.idxB = 0;
       }
       
       // Guardar progreso
@@ -278,16 +299,25 @@ function deshacerUna() {
   // Si no hay selección, quitar la última serie
   state.seriesRaw.pop();
   
-  if (state.iEnBloque > 1) {
-    state.iEnBloque--;
-  } else {
-    if (state.idxB > 0) {
-      state.idxB--;
-      const prev = state.bloques[state.idxB];
-      state.iEnBloque = prev.cantidad;
-    } else {
-      state.iEnBloque = 1;
+  // Recalcular en qué bloque estamos basándonos en el total de series escaneadas
+  if (state.seriesRaw.length > 0 && state.bloques.length > 0) {
+    let acumulado = 0;
+    state.idxB = state.bloques.length - 1;
+    
+    for (let i = 0; i < state.bloques.length; i++) {
+      const siguienteAcumulado = acumulado + state.bloques[i].cantidad;
+      if (state.seriesRaw.length >= acumulado && state.seriesRaw.length < siguienteAcumulado) {
+        state.idxB = i;
+        break;
+      }
+      if (state.seriesRaw.length === siguienteAcumulado && i < state.bloques.length - 1) {
+        state.idxB = i + 1;
+        break;
+      }
+      acumulado = siguienteAcumulado;
     }
+  } else {
+    state.idxB = 0;
   }
   
   // Guardar progreso
@@ -446,7 +476,7 @@ async function mostrarSeleccionOrden() {
 function iniciarEscaneoModelo(idx) {
   const bloque = state.bloques[idx];
   state.idxB = idx;
-  state.iEnBloque = 1;
+  state.modoLibreActivo = true; // Activar modo libre
   state.seriesRaw = []; // Limpiar series raw al cambiar de modelo
   state.serieSeleccionada = null; // Limpiar selección de serie
   
@@ -781,7 +811,6 @@ function guardarProgresoTarea() {
     // Para Modo S
     seriesRaw: state.seriesRaw,
     idxB: state.idxB,
-    iEnBloque: state.iEnBloque,
     timestamp: Date.now()
   };
   
@@ -827,13 +856,33 @@ async function cargarProgresoTarea() {
     state.modoLibreActivo = progreso.modoLibreActivo || false;
     // Restaurar progreso del Modo S
     state.seriesRaw = progreso.seriesRaw || [];
-    state.idxB = progreso.idxB || 0;
-    state.iEnBloque = progreso.iEnBloque || 1;
+    
+    // Recalcular el bloque actual basándose en las series escaneadas
+    if (state.seriesRaw.length > 0 && state.bloques.length > 0) {
+      let acumulado = 0;
+      state.idxB = state.bloques.length - 1; // Por defecto, el último bloque
+      
+      for (let i = 0; i < state.bloques.length; i++) {
+        const siguienteAcumulado = acumulado + state.bloques[i].cantidad;
+        // Si el total de series está entre este bloque, estamos aquí
+        if (state.seriesRaw.length >= acumulado && state.seriesRaw.length < siguienteAcumulado) {
+          state.idxB = i;
+          break;
+        }
+        // Si completamos exactamente este bloque, pasamos al siguiente
+        if (state.seriesRaw.length === siguienteAcumulado && i < state.bloques.length - 1) {
+          state.idxB = i + 1;
+          break;
+        }
+        acumulado = siguienteAcumulado;
+      }
+    } else {
+      state.idxB = 0;
+    }
   } else {
     state.seriesPorModelo = {};
     state.seriesRaw = [];
     state.idxB = 0;
-    state.iEnBloque = 1;
   }
 }
 

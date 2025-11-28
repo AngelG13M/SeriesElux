@@ -90,7 +90,6 @@ async function startTask(taskId) {
   state.itemsExpandidos = itemsExpandidos;
   state.seriesRaw = [];
   state.idxB = 0;
-  state.iEnBloque = 1;
   
   // Mostrar pantalla de escaneo
   mainScreen.classList.add('hidden');
